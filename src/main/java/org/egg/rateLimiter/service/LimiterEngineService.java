@@ -101,6 +101,13 @@ public interface LimiterEngineService {
      */
     boolean semaphoreBroadcastOrAck(String tag,String ip, boolean broadcastOrAck);
 
+
+    /**
+     * 分布式信号量 是否存在广播消息
+     * @param tag
+     * @return
+     */
+    String obtainTag(String tag);
     /**
      * 分布式信号量 所有客户端是否已响应
      * @param tag

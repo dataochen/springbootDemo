@@ -10,10 +10,7 @@ import org.springframework.util.CollectionUtils;
 import redis.clients.jedis.Jedis;
 
 import javax.annotation.Resource;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -106,6 +103,12 @@ public class RedisLimiterEngineServiceImpl implements LimiterEngineService {
             redis.opsForSet().add(String.format("%s_queue", obtainSemaphoreKey(tag)), ip);
         }
         return true;
+    }
+
+    @Override
+    public String obtainTag(String tag) {
+        Object res = redis.opsForValue().get(String.format("%s_nx", obtainSemaphoreKey(tag)));
+        return Objects.isNull(res) ? null : res.toString();
     }
 
     @Override

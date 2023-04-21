@@ -223,28 +223,36 @@ public class RateLimiterClient implements InitializingBean {
 
     private BigDecimal calcMax(String sourceKey, SourceConfig sourceConfig, BigDecimal avg, boolean firstStart) {
         List<IndexData> indexDataList = limiterEngineService.pullIndexDataList(sourceKey);
+        BigDecimal res;
         if (!firstStart) {
-            if (limiterEngineService.ifAllAck(NEW_CLIENT_FLAG)) {
+            //如果有新机器广播标识
+            String newClientIp = limiterEngineService.obtainTag(NEW_CLIENT_FLAG);
+            Integer oldMax = indexDataList.stream().filter(indexData -> indexData.getIp().equals(localIp)).findFirst().get().getMax();
+            if (Objects.nonNull(newClientIp)) {
                 //公式 A_max=A_max-(1/（已有机器数量+1）)*A_max)
-                Integer max = indexDataList.stream().filter(indexData -> indexData.getIp().equals(localIp)).findFirst().get().getMax();
-                return new BigDecimal(max).subtract(new BigDecimal(max).divide(new BigDecimal(indexDataList.size()), RoundingMode.HALF_UP));
+                res = new BigDecimal(oldMax).subtract(new BigDecimal(oldMax).divide(new BigDecimal(indexDataList.size()), RoundingMode.HALF_UP));
+                log.info("限速器负载均衡引擎 识别到有新机器ip:{} 发布 本客户端old:{}->new:{}", newClientIp, oldMax, res);
+
             } else {
 //            A_max=m*(A_avg/(A_avg+B_avg+...))
                 BigDecimal sum = indexDataList.stream().filter(indexData -> !indexData.getIp().equals(localIp))
                         .map(IndexData::getAvg)
                         .reduce(BigDecimal::add)
                         .get();
-                return new BigDecimal(sourceConfig.getMax()).multiply(avg.divide(sum.add(avg), RoundingMode.HALF_UP));
+                res = new BigDecimal(sourceConfig.getMax()).multiply(avg.divide(sum.add(avg), RoundingMode.HALF_UP));
+                log.debug("限速器负载均衡引擎 动态刷新 本客户端old:{}->new:{}", oldMax, res);
             }
         } else {
 //            ：新机器C_max=(1/（已有机器数量+1）)*A_max+(1/（已有机器数量+1）)*B_max+...
-            return indexDataList.stream()
+            res = indexDataList.stream()
                     .filter(indexData -> !indexData.getIp().equals(localIp))
                     .map(IndexData::getMax)
                     .map(max -> new BigDecimal(max).divide(new BigDecimal(indexDataList.size() + 1), RoundingMode.HALF_UP))
                     .reduce(BigDecimal::add).orElse(new BigDecimal(sourceConfig.getMax()));
+            log.info("限速器负载均衡引擎 新机器发布ip:{},new:{}", localIp, res);
 
         }
+        return res;
 
     }
 
